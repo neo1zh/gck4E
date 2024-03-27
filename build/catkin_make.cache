@@ -1,0 +1,2 @@
+cylinder_robot:learning_topic
+-DCATKIN_DEVEL_PREFIX=/home/robotics/workspace/gck4E/devel -DCMAKE_INSTALL_PREFIX=/home/robotics/workspace/gck4E/install -G Unix Makefiles

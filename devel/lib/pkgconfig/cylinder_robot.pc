@@ -1,0 +1,8 @@
+prefix=/home/robotics/workspace/gck4E/devel
+
+Name: cylinder_robot
+Description: Description of cylinder_robot
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 
