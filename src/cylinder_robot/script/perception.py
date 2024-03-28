@@ -151,7 +151,7 @@ class Localization(object):
         # # Check the length of laserscan.ranges
         # num_ranges = len(laserscan.ranges)
         # print("Number of laser ranges:", num_ranges)
-        print("laser scan ranges:", laserscan.ranges[0], laserscan.ranges[1])
+        # print("laser scan ranges:", laserscan.ranges[0], laserscan.ranges[1])
         y[0] = 5 - laserscan.ranges[0]
         y[1] = 5 - laserscan.ranges[1]
         current_time = rospy.get_time()
