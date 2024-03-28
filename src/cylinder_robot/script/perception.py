@@ -67,30 +67,36 @@ class KalmanFilter(object):
     def _predict_Step(self, ctrl_time):
         dt = ctrl_time - self.t
         self.t = ctrl_time
-        
+        Atilde, Btilde, Sigma_w_tilde = self._discretization_Func(dt)
 
-
+        self.x = np.dot(Atilde, self.x) + np.dot(Btilde, self.u)
+        self.P = np.dot(np.dot(Atilde, self.P), Atilde.T) + self.Sigma_w
 
     # correction step
     def _correction_Step(self, y):
-        innovation = 
-        
-
-
+        innovation = y - np.dot(self.C, self.x)
+        S = np.dot(np.dot(self.C, self.P), self.C.T) + self.Sigma_v
+        K = np.dot(np.dot(self.P, self.C.T), lnr.inv(S))            # Kalman gain
+        self.x = self.x + np.dot(K, innovation)
+        self.P = self.P - np.dot(np.dot(K, self.C), self.P)
+    
 
     # when getting the control signal, execution the predict step, update the control signal
     def control_moment(self, u_new, time_now):
-        
+        self.u = u_new
+        self._predict_Step(time_now)
 
 
     # when getting the observe info, execution the predict step, and then execution the correction step
     def observe_moment(self, y_new, time_now):
-        
+        self._predict_Step(time_now)
+        self._correction_Step(y_new)
 
     ## ==========================================================================  ^^^^^^^^^^
     ## ===================================== Edit above =====================================
 class Localization(object):
     def __init__(self):
+        self.name = 'cylinderRobot'
         # config the subscribe information
         rospy.Subscriber('/robot/control', Twist, self.callback_control)
         rospy.Subscriber('/robot/observe', LaserScan, self.callback_observe)
@@ -124,12 +130,13 @@ class Localization(object):
     ## ================================ Edit below here ================================ vvvvvvvvvvv
     def callback_control(self, twist):
         # extract control signal from message
-        
+        u_control = np.zeros([2,1])
+        u_control[0] = twist.linear.x
+        u_control[1] = twist.angular.z
+        current_time = rospy.get_time()
 
-        
         # call control moment function in Kalman filter
-        
-        
+        self.kf.control_moment(u_control, current_time)
 
         # save data for visualization
         self.x_esti_save.append(self.kf.x)
@@ -137,14 +144,19 @@ class Localization(object):
 
     def callback_observe(self, laserscan):
         # extract observe signal from message
-        
-        
+        y = np.zeros([2,1])
 
-        
+        # # Check the length of laserscan.ranges
+        # num_ranges = len(laserscan.ranges)
+        # print("Number of laser ranges:", num_ranges)
+
+        y[0] = laserscan.ranges[0]
+        y[1] = laserscan.ranges[1]
+        current_time = rospy.get_time()
+
         # call observe moment function in Kalman filter
+        self.kf.observe_moment(y, current_time)
         
-        
-
         # save data for visualzation
         self.x_esti_save.append(self.kf.x)
         self.x_esti_time.append(current_time)
@@ -211,7 +223,7 @@ class Localization(object):
 
 
 
-        fig_path = rospkg.RosPack().get_path('cylinder_robot')+"/"
+        fig_path = rospkg.RosPack().get_path('cylinder_robot')+"/figs/"
         fig_x.savefig(fig_path+'fig_x.png', dpi=120)
         print("Visualization Complete.")
 

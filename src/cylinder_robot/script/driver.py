@@ -20,14 +20,6 @@ class Driver(object):
         ## ===================================== Edit bellow =====================================
         ## ==========================================================================   vvvvvvvvvv
 
-        # Define publisher object.  Publish the state of robot to topic "/gazebo/set_model_state"
-        #   message type is ModelState
-        self.pub = rospy.Publisher(...)
-        # Define subscriber object. Subscrip the signal from  topic  "/robot/control" sent by teleop
-        #   message type is Twist
-        #   set the callback function as self.callback_control
-        rospy.Subscriber(...)
-
         # member variable saving system state.
         self.state = np.zeros([4,1])    
         # state = [ vx; px; vy; py ]
@@ -35,8 +27,8 @@ class Driver(object):
         #   cov[w(t), w(t)] = Sigma_w
 
         # Define matrix of continuous system:  A, B (by numpy).
-        self.A = ...
-        self.B = ...
+        self.A = np.array([[0, 1, 0, 0], [0, 0, 0, 0], [0, 0, 0, 1], [0, 0, 0, 0]])
+        self.B = np.array([[0, 0], [1/self.mass, 0], [0, 0], [0, 1/self.mass]])
 
         ## ==========================================================================  ^^^^^^^^^^
         ## ===================================== Edit above =====================================
@@ -51,9 +43,9 @@ class Driver(object):
             u = np.zeros([2,1])
             u[0] = twist.linear.x
             u[1] = twist.angular.z
-	    if u[0] ==0 and self.state[1,0]==0 and self.state[3,0]==0:
-		return 0
-	    else:
+            if u[0] == 0 and self.state[1,0] == 0 and self.state[3,0] == 0:
+                return 0
+            else:
                 self.state = self.forward_dynamics(u, dt)
                 self.sendStateMsg()
 
@@ -73,8 +65,26 @@ class Driver(object):
 
 
         # Please implementation the discretization function here
+        Atilde =  np.array([
+            [1, 0, 0, 0],
+            [dt, 1, 0, 0],
+            [0, 0, 1, 0],
+            [0, 0, dt, 1]
+        ])
 
+        Btilde = np.array([
+            [dt/self.mass, 0],
+            [dt**2/(2*self.mass), 0],
+            [0, dt/self.mass],
+            [0, dt**2/(2*self.mass)]
+        ])
 
+        Sigma_w_tilde = np.array([
+            [dt*self.Sigma_w[0, 0], dt**2/2*self.Sigma_w[0, 0], 0, 0],
+            [dt**2/2*self.Sigma_w[0, 0], dt*self.Sigma_w[1, 1]+dt**3/3*self.Sigma_w[0, 0], 0, 0],
+            [0, 0, dt*self.Sigma_w[2, 2], dt**2/2*self.Sigma_w[2, 2]],
+            [0, 0, dt**2/2*self.Sigma_w[2, 2], dt*self.Sigma_w[3, 3]+dt**3/3*self.Sigma_w[2, 2]]
+        ])
         ## ==========================================================================  ^^^^^^^^^^
         ## ===================================== Edit above =====================================
         return Atilde, Btilde, Sigma_w_tilde
