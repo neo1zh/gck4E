@@ -114,7 +114,9 @@ class Localization(object):
             ]),
             Sigma_w = np.eye(4)*0.00001,
             Sigma_v = np.array([[0.02**2, 0],[0, 0.02**2]]),
+            # Here the initial px, py is 0, 0. It should be 5,5.
             x_0 = np.zeros([4,1]),
+            # x_0 = np.array([[0],[5],[0],[5]]),
             P_0 = np.eye(4)/1000
             )
 
@@ -149,9 +151,9 @@ class Localization(object):
         # # Check the length of laserscan.ranges
         # num_ranges = len(laserscan.ranges)
         # print("Number of laser ranges:", num_ranges)
-
-        y[0] = laserscan.ranges[0]
-        y[1] = laserscan.ranges[1]
+        print("laser scan ranges:", laserscan.ranges[0], laserscan.ranges[1])
+        y[0] = 5 - laserscan.ranges[0]
+        y[1] = 5 - laserscan.ranges[1]
         current_time = rospy.get_time()
 
         # call observe moment function in Kalman filter
