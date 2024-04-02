@@ -6,6 +6,17 @@ from std_msgs.msg import String
 from geometry_msgs.msg import Twist
 from gazebo_msgs.msg import ModelState
 
+# read points
+def read_points():
+    path = ''
+    x = []
+    y = []
+    with open(path, 'r') as f:
+        for line in f:
+            x.append(float(line.split()[0]))
+            y.append(float(line.split()[1]))
+    return x, y
+
 # def controller():
 #     pub = rospy.Publisher('/robot/control', Twist, queue_size = 10)
     
@@ -66,8 +77,7 @@ class Controller:
         self.pid_y = PID_Controller(0.01, 0.0, 0.01, -1, 1)
         self.px = 0
         self.py = 0
-        self.targets_x = [1, 2, 0]
-        self.targets_y = [1, 2, 0]
+        self.targets_x, self.targets_y = read_points()
         self.target_index = 0  
         self.target_max_index = len(self.targets_x) - 1 
         self.tolerance = 0.1
