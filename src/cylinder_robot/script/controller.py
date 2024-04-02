@@ -44,6 +44,14 @@ class PID_Controller:
         else:
             output = output
         return output
+    
+    def reset(self):
+        # reset the PID controller
+        self.error = 0
+        self.last_error = 0
+        self.error_sum = 0
+        self.error_diff = 0
+        self.output = 0
 
     def get_output(self, error):
         # get the output of PID controller
@@ -62,13 +70,13 @@ class Controller:
         self.name = 'cylinderRobot'
         rospy.Subscriber('/robot/esti_model_state', ModelState, self.callback_state)
         self.pub = rospy.Publisher("/robot/control", Twist, queue_size=10)
-        self.pid_x = PID_Controller(0.01, 0.0, 0.01, -1, 1)
-        self.pid_y = PID_Controller(0.01, 0.0, 0.01, -1, 1)
+        self.pid_x = PID_Controller(1, 0, 0.01, -0.6, 0.6)
+        self.pid_y = PID_Controller(1, 0, 0.01, -0.6, 0.6)
         self.px = 0
         self.py = 0
         self.targets_x = [1, 2, 0]
         self.targets_y = [1, 2, 0]
-        self.target_index = 0  
+        self.target_index = 0
         self.target_max_index = len(self.targets_x) - 1 
         self.tolerance = 0.1
 
@@ -81,6 +89,7 @@ class Controller:
         error_x = self.targets_x[self.target_index] - self.px
         error_y = self.targets_y[self.target_index] - self.py
         return error_x, error_y
+    
 
     def control(self):
         error_x, error_y = self.calculate_error()
@@ -90,6 +99,8 @@ class Controller:
                 return
 
             self.target_index += 1
+            self.pid_x.reset()
+            self.pid_y.reset()
             # print('success, target index/total index:', self.target_index, "/" ,self.target_max_index)
 
         force_x = self.pid_x.get_output(error_x)
