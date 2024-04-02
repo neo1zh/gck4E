@@ -8,7 +8,7 @@ from gazebo_msgs.msg import ModelState
 
 # read points
 def read_points():
-    path = ''
+    path = '/home/robotics/workspace/gck4E/fig2points/sorted_contour.txt'
     x = []
     y = []
     with open(path, 'r') as f:
@@ -82,16 +82,17 @@ class Controller:
         rospy.Subscriber('/robot/esti_model_state', ModelState, self.callback_state)
         self.pub = rospy.Publisher("/robot/control", Twist, queue_size=10)
         self.state = ModelState()
-        self.pid_x = PID_Controller(1.3, 0, 0.4, -0.6, 0.6)
-        self.pid_y = PID_Controller(1.3, 0, 0.4, -0.6, 0.6)
+        self.pid_x = PID_Controller(1, 0, 0.1, -0.6, 0.6)
+        self.pid_y = PID_Controller(1, 0, 0.1, -0.6, 0.6)
         self.pid_vx = PID_Controller(10, 0, 0.01, -18, 18)
         self.pid_vy = PID_Controller(10, 0, 0.01, -18, 18)
         self.px = 0
         self.py = 0
-        self.targets_x, self.targets_y = read_points()
-        self.target_index = 0  
-        self.target_max_index = len(self.targets_x) - 1 
+        self.targets_x, self.targets_y = [0.370370], [1.34]
+        self.target_index = 0
+        self.target_max_index = len(self.targets_x)
         self.tolerance = 0.1
+
 
     def callback_state(self, modelstate):
         self.state = modelstate
@@ -107,34 +108,29 @@ class Controller:
 
     def control(self):
         twist = Twist()
-        error_x, error_y = self.calculate_error()
         
         if self.target_index == self.target_max_index:
             rospy.loginfo('Finish')
             return
+        
+        error_x, error_y = self.calculate_error()
+        tmp_x = self.pid_x.get_output(error_x)
+        tmp_y = self.pid_y.get_output(error_y)
 
         if abs(error_x) < self.tolerance and abs(error_y) < self.tolerance:
-
             self.target_index += 1
             self.pid_x.reset()
             self.pid_y.reset()
             self.pid_vx.reset()
             self.pid_vy.reset()
-            twist.linear.x = 0
-            twist.angular.z = 0
+            tmp_x = 0
+            tmp_y = 0
+            self.x_motion = True
             rospy.loginfo('target_index: %d', self.target_index)
-        else:
-            tmp_x = self.pid_x.get_output(error_x)
-            tmp_y = self.pid_y.get_output(error_y)
-
-            error_vx = tmp_x - self.state.twist.linear.x
-            error_vy = tmp_y - self.state.twist.angular.z
-
-            force_vx = self.pid_vx.get_output(error_vx)
-            force_vy = self.pid_vy.get_output(error_vy)
-
-            twist.linear.x = force_vx
-            twist.angular.z = force_vy
+        
+ 
+        twist.linear.x = tmp_x
+        twist.angular.z = tmp_y
 
         self.pub.publish(twist)
         rospy.loginfo('error_x: %f, error_y: %f, twist.linear.x: %f, twist.angular.z: %f', error_x, error_y, twist.linear.x, twist.angular.z)
