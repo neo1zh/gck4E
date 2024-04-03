@@ -82,10 +82,10 @@ class Controller:
         rospy.Subscriber('/robot/esti_model_state', ModelState, self.callback_state)
         self.pub = rospy.Publisher("/robot/control", Twist, queue_size=10)
         self.state = ModelState()
-        self.pid_x = PID_Controller(1.2, 0, 0.1, -0.5, 0.5)
-        self.pid_y = PID_Controller(1.2, 0, 0.1, -0.5, 0.5)
-        self.pid_vx = PID_Controller(10, 0, 0.1, -18, 18)
-        self.pid_vy = PID_Controller(10, 0, 0.1, -18, 18)
+        self.pid_x = PID_Controller(1.3, 0, 0.4, -0.6, 0.6) 
+        self.pid_y = PID_Controller(1.3, 0, 0.4, -0.6, 0.6) 
+        self.pid_vx = PID_Controller(10,0, 0.01, -18, 18)
+        self.pid_vy = PID_Controller(10,0, 0.01, -18, 18)
         self.px = 0
         self.py = 0
         self.vx = 0
@@ -138,7 +138,7 @@ class Controller:
                 sys.exit(0)
             
             error_x, error_y, error_vx, error_vy = self.calculate_error()
-            # rospy.loginfo('error_x: %f, error_y: %f, target_vx: %f, target_vy: %f', error_x, error_y, self.target_vx, self.target_vy)
+            rospy.loginfo('error_x: %f, error_y: %f, target_vx: %f, target_vy: %f', error_x, error_y, self.target_vx, self.target_vy)
             # rospy.loginfo('vx: %f, vy: %f, error_vx: %f, error_vy: %f', self.vx, self.vy, error_vx, error_vy)
 
             if (abs(error_x) + abs(error_y)) < self.tolerance:
