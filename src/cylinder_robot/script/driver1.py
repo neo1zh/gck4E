@@ -20,14 +20,6 @@ class Driver(object):
         ## ===================================== Edit bellow =====================================
         ## ==========================================================================   vvvvvvvvvv
 
-        # Define publisher object.  Publish the state of robot to topic "/gazebo/set_model_state"
-        #   message type is ModelState
-        self.pub = rospy.Publisher("/gazebo/set_model_state", ModelState, queue_size=10)
-        # Define subscriber object. Subscrip the signal from  topic  "/robot/control" sent by teleop
-        #   message type is Twist
-        #   set the callback function as self.callback_control
-        rospy.Subscriber('/robot/control', Twist, self.callback_control)
-
         # member variable saving system state.
         self.state = np.zeros([4,1])    
         # state = [ vx; px; vy; py ]
@@ -35,30 +27,25 @@ class Driver(object):
         #   cov[w(t), w(t)] = Sigma_w
 
         # Define matrix of continuous system:  A, B (by numpy).
-        self.A = np.array([[0, 0, 0, 0],
-                           [1, 0, 0, 0],
-                           [0, 0, 0, 0],
-                           [0, 0, 1, 0]])
-        self.B = np.array([[1/self.mass, 0],
-                           [0, 0],
-                           [0, 1/self.mass],
-                           [0, 0]])
+        self.A = np.array([[0, 1, 0, 0], [0, 0, 0, 0], [0, 0, 0, 1], [0, 0, 0, 0]])
+        self.B = np.array([[0, 0], [1/self.mass, 0], [0, 0], [0, 1/self.mass]])
+
         ## ==========================================================================  ^^^^^^^^^^
         ## ===================================== Edit above =====================================
         self.Sigma_w = np.eye(4)*0.00001
  
     def callback_control(self, twist):
-        u = np.zeros([2,1])
         if self.time_save == 0:
             self.time_save = rospy.get_time()
         else:
             dt = rospy.get_time() - self.time_save
             self.time_save = rospy.get_time()
+            u = np.zeros([2,1])
             u[0] = twist.linear.x
             u[1] = twist.linear.y
-        if u[0] ==0 and self.state[1,0]==0 and self.state[3,0]==0:
-            return 0
-        else:
+            if u[0] == 0 and self.state[1,0] == 0 and self.state[3,0] == 0:
+                return 0
+            else:
                 self.state = self.forward_dynamics(u, dt)
                 self.sendStateMsg()
 
@@ -77,35 +64,27 @@ class Driver(object):
         ## ==========================================================================   vvvvvvvvvv
 
 
-        Atilde = np.array([
+        # Please implementation the discretization function here
+        Atilde =  np.array([
             [1, 0, 0, 0],
             [dt, 1, 0, 0],
             [0, 0, 1, 0],
             [0, 0, dt, 1]
         ])
+
         Btilde = np.array([
-            [dt / self.mass, 0],
-            [dt * dt / 2 / self.mass, 0],
-            [0, dt / self.mass],
-            [0, dt * dt / 2 / self.mass]
+            [dt/self.mass, 0],
+            [dt**2/(2*self.mass), 0],
+            [0, dt/self.mass],
+            [0, dt**2/(2*self.mass)]
         ])
-        # discretize the noise
-        # Matrix([[-2*Delta_t**3*q2/3 + Delta_t*(Delta_t**2*q2 + q1), Delta_t**2*q2/2, 0, 0], 
-        # [Delta_t**2*q2/2, Delta_t*q2, 0, 0], 
-        # [0, 0, -2*Delta_t**3*q4/3 + Delta_t*(Delta_t**2*q4 + q3), Delta_t**2*q4/2], 
-        # [0, 0, Delta_t**2*q4/2, Delta_t*q4]])
-        q1 = self.Sigma_w[0, 0]
-        q2 = self.Sigma_w[1, 1]
-        q3 = self.Sigma_w[2, 2]
-        q4 = self.Sigma_w[3, 3]
+
         Sigma_w_tilde = np.array([
-            [dt * q1,dt**2*q1/2, 0, 0],
-            [dt**2*q1/2, -2*dt**3*q1/3 + dt*(dt**2*q1 + q2), 0, 0],
-            [0, 0, dt*q3, dt**2*q3/2],
-            [0, 0, dt**2*q3/2, -2*dt**3*q3/3 + dt*(dt**2*q3 + q4)],
+            [dt*self.Sigma_w[0, 0], dt**2/2*self.Sigma_w[0, 0], 0, 0],
+            [dt**2/2*self.Sigma_w[0, 0], dt*self.Sigma_w[1, 1]+dt**3/3*self.Sigma_w[0, 0], 0, 0],
+            [0, 0, dt*self.Sigma_w[2, 2], dt**2/2*self.Sigma_w[2, 2]],
+            [0, 0, dt**2/2*self.Sigma_w[2, 2], dt*self.Sigma_w[3, 3]+dt**3/3*self.Sigma_w[2, 2]]
         ])
-
-
         ## ==========================================================================  ^^^^^^^^^^
         ## ===================================== Edit above =====================================
         return Atilde, Btilde, Sigma_w_tilde
