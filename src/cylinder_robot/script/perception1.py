@@ -1,11 +1,8 @@
 #!/usr/bin/env python
 
 import rospy
-import math
 import rospkg
-import scipy.linalg as lnr
-from scipy.linalg import expm
-from scipy import integrate
+from scipy import linalg as lnr
 from matplotlib import pyplot as plt
 import numpy as np
 from sensor_msgs.msg import LaserScan
@@ -36,8 +33,6 @@ class KalmanFilter(object):
         self.x = x_0
         self.P = P_0
         self.u = np.zeros([self.m, 1])
-        self.last_x = self.x
-        self.last_P = self.P
 
     # Given duration dt, return the discretization of A, B, Sigma_w. Just like what we do last week.
     def _discretization_Func(self, dt):
@@ -68,44 +63,28 @@ class KalmanFilter(object):
 
     ################################################################################################
     ## ================================ Edit below here ================================ vvvvvvvvvvv
-    def check_and_handle_nan(self):
-        if np.isnan(self.x).any() or np.isnan(self.P).any():
-            rospy.logwarn("NaN detected in state or covariance, resetting filter!")
-            self.x = self.last_x
-            self.P = self.last_P
-
     # predict step
     def _predict_Step(self, ctrl_time):
-        self.last_P = self.P
-        self.last_x = self.x
         dt = ctrl_time - self.t
         self.t = ctrl_time
-        A , B , Q = self._discretization_Func(dt)
+        Atilde, Btilde, Sigma_w_tilde = self._discretization_Func(dt)
 
-        self.x = A.dot(self.x) + B.dot(self.u)
-        self.P = A.dot(self.P).dot(A.T) + Q
-        # print('x_pre', self.x_predicted)
-        self.check_and_handle_nan()
+        self.x = np.dot(Atilde, self.x) + np.dot(Btilde, self.u)
+        self.P = np.dot(np.dot(Atilde, self.P), Atilde.T) + self.Sigma_w
 
     # correction step
     def _correction_Step(self, y):
-        self.last_P = self.P
-        self.last_x = self.x
-        innovation = y - self.C.dot(self.x)
-        R = self.Sigma_v
-        S = self.C.dot(self.P).dot(self.C.T) + R
-        K = self.P.dot(self.C.T).dot(np.linalg.inv(S))
-        self.x = self.x + K.dot(innovation)
-        I = np.eye(self.n)
-        self.P = (I - K.dot(self.C)).dot(self.P).dot((I - K.dot(self.C)).T) + K.dot(self.Sigma_v).dot(K.T)
-        # self.P = self.P - K.dot(self.C).dot(self.P)
-        self.check_and_handle_nan()
-
+        innovation = y - np.dot(self.C, self.x)
+        S = np.dot(np.dot(self.C, self.P), self.C.T) + self.Sigma_v
+        K = np.dot(np.dot(self.P, self.C.T), lnr.inv(S))            # Kalman gain
+        self.x = self.x + np.dot(K, innovation)
+        self.P = self.P - np.dot(np.dot(K, self.C), self.P)
+    
 
     # when getting the control signal, execution the predict step, update the control signal
     def control_moment(self, u_new, time_now):
-        self._predict_Step(time_now)
         self.u = u_new
+        self._predict_Step(time_now)
 
 
     # when getting the observe info, execution the predict step, and then execution the correction step
@@ -117,6 +96,7 @@ class KalmanFilter(object):
     ## ===================================== Edit above =====================================
 class Localization(object):
     def __init__(self):
+        self.name = 'cylinderRobot'
         # config the subscribe information
         rospy.Subscriber('/robot/control', Twist, self.callback_control)
         rospy.Subscriber('/robot/observe', LaserScan, self.callback_observe)
@@ -134,7 +114,9 @@ class Localization(object):
             ]),
             Sigma_w = np.eye(4)*0.00001,
             Sigma_v = np.array([[0.02**2, 0],[0, 0.02**2]]),
+            # Here the initial px, py is 0, 0. It should be 5,5.
             x_0 = np.zeros([4,1]),
+            # x_0 = np.array([[0],[5],[0],[5]]),
             P_0 = np.eye(4)/1000
             )
 
@@ -150,15 +132,13 @@ class Localization(object):
     ## ================================ Edit below here ================================ vvvvvvvvvvv
     def callback_control(self, twist):
         # extract control signal from message
-        u = np.zeros([2,1])
-        u[0] = twist.linear.x
-        u[1] = twist.linear.y
+        u_control = np.zeros([2,1])
+        u_control[0] = twist.linear.x
+        u_control[1] = twist.angular.z
         current_time = rospy.get_time()
 
-        
         # call control moment function in Kalman filter
-        self.kf.control_moment(u, current_time)
-        
+        self.kf.control_moment(u_control, current_time)
 
         # save data for visualization
         self.x_esti_save.append(self.kf.x)
@@ -167,18 +147,18 @@ class Localization(object):
     def callback_observe(self, laserscan):
         # extract observe signal from message
         y = np.zeros([2,1])
-        x_init = laserscan.ranges[0]
-        y_init = laserscan.ranges[1]
-        y[0,0] = 5 - x_init
-        y[1,0] = 5 - y_init
-        
+
+        # # Check the length of laserscan.ranges
+        # num_ranges = len(laserscan.ranges)
+        # print("Number of laser ranges:", num_ranges)
+        # print("laser scan ranges:", laserscan.ranges[0], laserscan.ranges[1])
+        y[0] = 5 - laserscan.ranges[0]
+        y[1] = 5 - laserscan.ranges[1]
         current_time = rospy.get_time()
-        
+
         # call observe moment function in Kalman filter
         self.kf.observe_moment(y, current_time)
         
-        
-
         # save data for visualzation
         self.x_esti_save.append(self.kf.x)
         self.x_esti_time.append(current_time)
@@ -203,14 +183,13 @@ class Localization(object):
 
     def sendStateMsg(self):
         msg = ModelState()
-
+        msg.model_name = self.name
+        msg.twist.linear.x = self.kf.x[0]
         msg.pose.position.x = self.kf.x[1]
-        msg.pose.position.y = self.kf.x[3]
-        msg.twist.linear.x = self.kf.x[0]# velocity
         msg.twist.linear.y = self.kf.x[2]
+        msg.pose.position.y = self.kf.x[3]
         self.pub.publish(msg)
 
-    # visualzation
     # visualzation
     def visualization(self):
         print("Visualizing......")
@@ -224,37 +203,34 @@ class Localization(object):
         x_true = np.concatenate(self.x_true_save, axis=1)
 
         fig_x = plt.figure(figsize=(16,9))
-        
-        plt.subplot(2,2,1)
+        ax = fig_x.subplots(2,2)
 
-        plt.plot(t_esti, x_esti[1,:].T, label = "esti")
-        plt.plot(t_true, x_true[1,:].T, label = "true")
-        plt.legend(bbox_to_anchor = (0.85,1), loc='upper left')
-        plt.title('px')
+        ax[0,0].plot(t_esti, x_esti[1,:].T, label = "esti")
+        ax[0,0].plot(t_true, x_true[1,:].T, label = "true")
+        ax[0,0].legend(bbox_to_anchor = (0.85,1), loc='upper left')
+        ax[0,0].set_title('px')
 
-        plt.subplot(2,2,2)
-        plt.plot(t_esti, x_esti[3,:].T, label = "esti")
-        plt.plot(t_true, x_true[3,:].T, label = "true")
-        plt.legend(bbox_to_anchor = (0.85,1), loc='upper left')
-        plt.title('py')
+        ax[1,0].plot(t_esti, x_esti[3,:].T, label = "esti")
+        ax[1,0].plot(t_true, x_true[3,:].T, label = "true")
+        ax[1,0].legend(bbox_to_anchor = (0.85,1), loc='upper left')
+        ax[1,0].set_title('py')
 
-        plt.subplot(2,2,3)
-        plt.plot(x_esti[1,:].T, x_esti[3,:].T, label = "esti")
-        plt.plot(x_true[1,:].T, x_true[3,:].T, label = "true")
-        plt.legend(bbox_to_anchor = (0.1,1), loc='upper left')
-        plt.title('trace: esti with truth')
+        ax[0,1].plot(x_esti[1,:].T, x_esti[3,:].T, label = "esti")
+        ax[0,1].plot(x_true[1,:].T, x_true[3,:].T, label = "true")
+        ax[0,1].legend(bbox_to_anchor = (0.1,1), loc='upper left')
+        ax[0,1].set_title('trace: esti with truth')
 
-        plt.subplot(2,2,4)
-        plt.plot(x_esti[1,:].T, x_esti[3,:].T, label = 'esti')
-        plt.plot(p_obsv[0,:].T, p_obsv[1,:].T, label = 'obsv')
-        plt.legend(bbox_to_anchor = (0.1,1), loc='upper left')
-        plt.title('trace: esti with observation')
+        ax[1,1].plot(x_esti[1,:].T, x_esti[3,:].T, label = 'esti')
+        ax[1,1].plot(p_obsv[0,:].T, p_obsv[1,:].T, label = 'obsv')
+        ax[1,1].legend(bbox_to_anchor = (0.1,1), loc='upper left')
+        ax[1,1].set_title('trace: esti with observation')
 
 
 
-        fig_path = rospkg.RosPack().get_path('cylinder_robot')+"/"
+        fig_path = rospkg.RosPack().get_path('cylinder_robot')+"/figs/"
         fig_x.savefig(fig_path+'fig_x.png', dpi=120)
         print("Visualization Complete.")
+
 
 
 if __name__ == '__main__':

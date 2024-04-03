@@ -9,7 +9,7 @@
     <arg name="debug" value="false"/>
   </include>
   <!-- <node pkg="rviz" name="rviz" type="rviz" args="-d $(find cylinder_robot)/config/rvizConfig.rviz"/> -->
-  <node pkg="cylinder_robot" name="driver" type="driver.py" output="screen" respawn="false"/>
-  <node pkg="cylinder_robot" name="controller" type="controller.py" output="screen" respawn="false"/>
-  <node pkg="cylinder_robot" name="perception" type="perception.py" output="screen" respawn="false"/>
+  <node pkg="cylinder_robot" name="driver" type="driver1.py" output="screen" respawn="false"/>
+  <node pkg="cylinder_robot" name="controller" type="controller1.py" output="screen" respawn="false"/>
+  <node pkg="cylinder_robot" name="perception" type="perception1.py" output="screen" respawn="false"/>
 </launch>
