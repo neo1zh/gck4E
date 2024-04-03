@@ -93,7 +93,7 @@ class Controller:
         self.target_vx = 0
         self.target_vy = 0
         self.targets_x, self.targets_y = [-2,-2,2,2], [-2,2,2,-2]
-        # self.targets_x, self.targets_y = read_points()
+        self.targets_x, self.targets_y = read_points()
         self.target_index = 0
         self.target_max_index = len(self.targets_x)
         self.tolerance = 0.2
@@ -138,8 +138,8 @@ class Controller:
                 sys.exit(0)
             
             error_x, error_y, error_vx, error_vy = self.calculate_error()
-            rospy.loginfo('error_x: %f, error_y: %f, target_vx: %f, target_vy: %f', error_x, error_y, self.target_vx, self.target_vy)
-            rospy.loginfo('vx: %f, vy: %f, error_vx: %f, error_vy: %f', self.vx, self.vy, error_vx, error_vy)
+            # rospy.loginfo('error_x: %f, error_y: %f, target_vx: %f, target_vy: %f', error_x, error_y, self.target_vx, self.target_vy)
+            # rospy.loginfo('vx: %f, vy: %f, error_vx: %f, error_vy: %f', self.vx, self.vy, error_vx, error_vy)
 
             if (abs(error_x) + abs(error_y)) < self.tolerance:
                 self.target_index += 1
