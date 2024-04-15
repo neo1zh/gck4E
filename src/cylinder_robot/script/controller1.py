@@ -82,23 +82,43 @@ class Controller:
         rospy.Subscriber('/robot/esti_model_state', ModelState, self.callback_state)
         self.pub = rospy.Publisher("/robot/control", Twist, queue_size=10)
         self.state = ModelState()
-        self.pid_x = PID_Controller(1.3, 0, 0.4, -0.6, 0.6) 
-        self.pid_y = PID_Controller(1.3, 0, 0.4, -0.6, 0.6) 
-        self.pid_vx = PID_Controller(10,0, 0.01, -18, 18)
-        self.pid_vy = PID_Controller(10,0, 0.01, -18, 18)
+        self.pid_x = PID_Controller(1.3, 0, 0.4, -0.3, 0.3) 
+        self.pid_y = PID_Controller(1.3, 0, 0.4, -0.3, 0.3) 
+        self.pid_vx = PID_Controller(10,0, 0.01, -8, 8)
+        self.pid_vy = PID_Controller(10,0, 0.01, -8, 8)
         self.px = 0
         self.py = 0
         self.vx = 0
         self.vy = 0
         self.target_vx = 0
         self.target_vy = 0
-        self.targets_x, self.targets_y = [-2,-2,2,2], [-2,2,2,-2]
-        self.targets_x, self.targets_y = read_points()
+        self.targets_x, self.targets_y = [4], [4]
+        # self.targets_x, self.targets_y = read_points()
         self.target_index = 0
         self.target_max_index = len(self.targets_x)
         self.tolerance = 0.2
         self.twist = Twist()
+        self.xBlock = False
+        self.yBlock = False
+        self.dis_safe = 0.5
+        self.block_delta = 1
+        self.last_px = 0
+        self.last_py = 0
+        self.cnt = 0
 
+    def check_block(self):
+        delta_x = self.px - self.last_px
+        delta_y = self.py - self.last_py
+
+        if abs(delta_x) > self.block_delta:
+            self.xBlock = not self.xBlock
+
+        if abs(delta_y) > self.block_delta:
+            self.yBlock = not self.yBlock
+
+        self.last_px = self.px
+        self.last_py = self.py
+        rospy.loginfo('xBlock: %s, yBlock: %s', self.xBlock, self.yBlock)
 
     def callback_state(self, modelstate):
         self.state = modelstate
@@ -106,7 +126,12 @@ class Controller:
         self.vx = modelstate.twist.linear.x
         self.py = modelstate.pose.position.y
         self.vy = modelstate.twist.linear.y
+        self.check_block()
+        if self.cnt < 3:
+            self.cnt += 1
+            self.yBlock = True
 
+        
     def calculate_error(self):
         error_x = self.targets_x[self.target_index] - self.px
         error_y = self.targets_y[self.target_index] - self.py
@@ -136,16 +161,25 @@ class Controller:
             if self.target_index == self.target_max_index:
                 rospy.loginfo('Finish')
                 sys.exit(0)
-            
+
             error_x, error_y, error_vx, error_vy = self.calculate_error()
-            rospy.loginfo('error_x: %f, error_y: %f, target_vx: %f, target_vy: %f', error_x, error_y, self.target_vx, self.target_vy)
+            # rospy.loginfo('error_x: %f, error_y: %f, target_vx: %f, target_vy: %f', error_x, error_y, self.target_vx, self.target_vy)
             # rospy.loginfo('vx: %f, vy: %f, error_vx: %f, error_vy: %f', self.vx, self.vy, error_vx, error_vy)
+
+            if self.yBlock:
+                self.twist.linear.y = 0
+                self.pid_y.reset()
+
+            if self.xBlock:
+                self.twist.linear.x = 0
+                self.pid_x.reset()
 
             if (abs(error_x) + abs(error_y)) < self.tolerance:
                 self.target_index += 1
                 self.reset()
                 rospy.loginfo('now: %d / %d', self.target_index, self.target_max_index)
 
+            rospy.loginfo('self.twist.linear.x: %f, self.twist.linear.y: %f', self.twist.linear.x, self.twist.linear.y)
             self.pub.publish(self.twist)
         sys.exit(0)
 
